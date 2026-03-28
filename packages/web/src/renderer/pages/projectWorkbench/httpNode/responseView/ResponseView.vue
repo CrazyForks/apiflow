@@ -47,7 +47,7 @@
 </template>
 
 <script lang="ts" setup>
-import { computed, ref } from 'vue'
+import { computed, provide, ref, watch } from 'vue'
 import SBaseInfoView from './baseInfo/BaseInfoView.vue'
 import SResponseSummaryView from './responseSummary/ResponseSummaryView.vue'
 import SCookieView from './cookie/CookieView.vue'
@@ -60,7 +60,7 @@ import { useHttpNodeResponse } from '@/store/httpNode/httpNodeResponseStore'
 import { useProjectWorkbench } from '@/store/projectWorkbench/projectWorkbenchStore'
 import { useHttpNode } from '@/store/httpNode/httpNodeStore'
 import SLoading from '@/components/common/loading/ClLoading.vue'
-
+import { responseBodyViewContextKey } from './responseBodyViewContext'
 
 const { t } = useI18n()
 
@@ -70,6 +70,41 @@ const projectWorkbenchStore = useProjectWorkbench();
 const httpNodeStore = useHttpNode();
 const cookies = computed(() => httpNodeResponseStore.responseInfo.headers['set-cookie']);
 const responseInfo = computed(() => httpNodeResponseStore.responseInfo);
+const responseBodyViewMode = ref<'text' | 'json'>('text');
+const canSwitchResponseBodyViewMode = computed(() => {
+  const { canApiflowParseType, textData } = responseInfo.value.responseData;
+  if (canApiflowParseType !== 'text' || requestState.value !== 'finish') {
+    return false;
+  }
+  const trimmedText = textData.trim();
+  if (trimmedText === '' || (!trimmedText.startsWith('{') && !trimmedText.startsWith('['))) {
+    return false;
+  }
+  try {
+    const parsedValue = JSON.parse(trimmedText) as unknown;
+    return typeof parsedValue === 'object' && parsedValue !== null;
+  } catch {
+    return false;
+  }
+});
+const activeResponseBodyViewMode = computed<'text' | 'json'>(() => {
+  if (!canSwitchResponseBodyViewMode.value) {
+    return 'text';
+  }
+  return responseBodyViewMode.value;
+});
+const switchResponseBodyViewMode = (mode: 'text' | 'json') => {
+  if (mode === 'json' && !canSwitchResponseBodyViewMode.value) {
+    return;
+  }
+  responseBodyViewMode.value = mode;
+};
+provide(responseBodyViewContextKey, {
+  responseBodyViewMode,
+  activeResponseBodyViewMode,
+  canSwitchResponseBodyViewMode,
+  switchResponseBodyViewMode,
+});
 
 const headers = computed(() => {
   const result: { key: string, value: string }[] = [];
@@ -85,6 +120,14 @@ const headers = computed(() => {
 const layout = computed(() => projectWorkbenchStore.layout);
 const requestState = computed(() => httpNodeResponseStore.requestState); //请求状态
 const responseBodyLoading = computed(() => httpNodeStore.responseBodyLoading); //返回体加载状态
+watch(() => [
+  requestState.value,
+  responseInfo.value.contentType,
+  responseInfo.value.bodyByteLength,
+  responseInfo.value.responseData.textData,
+], () => {
+  responseBodyViewMode.value = 'text';
+});
 
 </script>
 

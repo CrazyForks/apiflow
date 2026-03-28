@@ -168,9 +168,35 @@
           <span class="orange mr-3 ml-1">{{ formatUnit(formatedText.length, 'bytes') }}</span>
           <span>{{ t('超过最大预览限制') }}</span>
           <span class="ml-1 mr-3">{{ formatUnit(httpNodeConfigStore.currentHttpNodeConfig.maxTextBodySize, 'bytes') }}</span>
-          <el-button link type="primary" text @click="() => downloadStringAsText(formatedText, 'response.txt')">{{ t("下载到本地预览") }}</el-button>
+          <el-button link type="primary" text @click="() => downloadStringAsText(formatedText, textResponseDownloadName)">{{ t("下载到本地预览") }}</el-button>
         </div>
-        <SJsonEditor v-else :model-value="formatedText" read-only :config="{ fontSize: 13, language: 'text' }"></SJsonEditor>
+        <div v-else-if="isManualJsonTextView" class="json-editor-wrap">
+          <SJsonEditor :model-value="formatedText" read-only :config="{ fontSize: 13, language: 'json' }"></SJsonEditor>
+          <div class="response-body-op">
+            <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'text' }" @click="switchResponseBodyViewMode('text')">
+              <FileText :size="14" />
+              <span>{{ t('文本') }}</span>
+            </button>
+            <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'json' }" @click="switchResponseBodyViewMode('json')">
+              <FileJson :size="14" />
+              <span>JSON</span>
+            </button>
+            <span class="op-btn" @click="handleFormatResponse">{{ t('格式化') }}</span>
+          </div>
+        </div>
+        <div v-else class="text-editor-wrap">
+          <SJsonEditor :model-value="formatedText" read-only :config="{ fontSize: 13, language: 'text' }"></SJsonEditor>
+          <div v-if="canSwitchResponseBodyViewMode" class="response-body-op">
+            <button type="button" class="view-mode-btn active" @click="switchResponseBodyViewMode('text')">
+              <FileText :size="14" />
+              <span>{{ t('文本') }}</span>
+            </button>
+            <button type="button" class="view-mode-btn" @click="switchResponseBodyViewMode('json')">
+              <FileJson :size="14" />
+              <span>JSON</span>
+            </button>
+          </div>
+        </div>
       </div>
       <!-- application/json -->
       <div v-else-if="httpNodeResponseStore.responseInfo.responseData.canApiflowParseType === 'json'" class="text-wrap">
@@ -346,7 +372,7 @@
 <script lang="ts" setup>
 import { useProjectWorkbench } from '@/store/projectWorkbench/projectWorkbenchStore';
 import { useHttpNodeResponse } from '@/store/httpNode/httpNodeResponseStore';
-import { computed, onMounted, onUnmounted, ref, watch, defineAsyncComponent } from 'vue';
+import { computed, inject, onMounted, onUnmounted, ref, watch, defineAsyncComponent } from 'vue';
 import { useI18n } from 'vue-i18n'
 import { downloadStringAsText, isElectron } from '@/helper'
 import { formatHeader, formatUnit } from '@/helper'
@@ -359,6 +385,8 @@ import { ElDialog } from 'element-plus';
 import beautify, { html as htmlBeautify, css as cssBeautify } from 'js-beautify';
 import worker from '@/worker/prettier.worker.ts?worker&inline';
 import { Download, Loading } from '@element-plus/icons-vue';
+import { FileJson, FileText } from 'lucide-vue-next'
+import { responseBodyViewContextKey } from '../responseBodyViewContext'
 
 const SJsonEditor = defineAsyncComponent(() => import('@/components/common/jsonEditor/ClJsonEditor.vue'))
 
@@ -376,6 +404,7 @@ const httpNodeResponseStore = useHttpNodeResponse();
 const projectWorkbenchStore = useProjectWorkbench();
 const httpNodeStore = useHttpNode();
 const httpNodeConfigStore = useHttpNodeConfig();
+const responseBodyViewContext = inject(responseBodyViewContextKey, null)
 const loadingProcess = computed(() => httpNodeResponseStore.loadingProcess);
 const requestState = computed(() => httpNodeResponseStore.requestState);
 const redirectList = computed(() => httpNodeResponseStore.responseInfo.redirectList);
@@ -397,6 +426,14 @@ const formatedText = ref('');
 const projectNavStore = useProjectNav();
 const selectedNav = computed(() => projectNavStore.getSelectedNav(projectWorkbenchStore.projectId));
 const showRedirectDialog = ref(false);
+const canSwitchResponseBodyViewMode = computed(() => responseBodyViewContext?.canSwitchResponseBodyViewMode.value ?? false)
+const activeResponseBodyViewMode = computed(() => responseBodyViewContext?.activeResponseBodyViewMode.value ?? 'text')
+const isManualJsonTextView = computed(() => {
+  return httpNodeResponseStore.responseInfo.responseData.canApiflowParseType === 'text'
+    && canSwitchResponseBodyViewMode.value
+    && activeResponseBodyViewMode.value === 'json'
+})
+const textResponseDownloadName = computed(() => isManualJsonTextView.value ? 'response.json' : 'response.txt')
 /*
 |--------------------------------------------------------------------------
 | 方法定义
@@ -427,7 +464,7 @@ const resolveFormatPayload = (): FormatPayload | null => {
   const safeContentType = contentType || '';
   const textData = responseData.textData || '';
   const targetType = responseData.canApiflowParseType;
-  if (targetType === 'json' || safeContentType.includes('application/json')) {
+  if (targetType === 'json' || safeContentType.includes('application/json') || isManualJsonTextView.value) {
     const jsonSource = responseData.jsonData || textData;
     if (!jsonSource) return null;
     return { type: 'format-json', code: jsonSource };
@@ -505,6 +542,7 @@ watch(() => [
   httpNodeResponseStore.responseInfo.bodyByteLength,
   httpNodeResponseStore.responseInfo.responseData.textData,
   httpNodeResponseStore.requestState,
+  activeResponseBodyViewMode.value,
 ], () => {
   const payload = resolveFormatPayload();
   const textData = httpNodeResponseStore.responseInfo.responseData.textData || '';
@@ -588,7 +626,9 @@ const isJsonDataEmpty = computed(() => {
 })
 //格式化响应JSON
 const handleFormatResponse = () => {
-  const source = formatedText.value || httpNodeResponseStore.responseInfo.responseData.jsonData || '';
+  const source = formatedText.value
+    || httpNodeResponseStore.responseInfo.responseData.jsonData
+    || (isManualJsonTextView.value ? httpNodeResponseStore.responseInfo.responseData.textData : '');
   if (!source) return;
   try {
     const formatted = beautify(source, { indent_size: 2 });
@@ -596,6 +636,9 @@ const handleFormatResponse = () => {
   } catch {
     // 格式化失败时保持原样
   }
+}
+const switchResponseBodyViewMode = (mode: 'text' | 'json') => {
+  responseBodyViewContext?.switchResponseBodyViewMode(mode)
 }
 onMounted(() => {
   prettierWorker.onmessage = (event: MessageEvent<WorkerResultMessage>) => {
@@ -721,12 +764,6 @@ onUnmounted(() => {
   }
   .text-wrap {
     height: 100%;
-    .text-tool {
-      display: flex;
-      align-items: center;
-      height: 20px;
-      border-bottom: 1px solid var(--border-light);
-    }
     @keyframes spin {
       0% {
         transform: rotate(0deg);
@@ -746,7 +783,8 @@ onUnmounted(() => {
         animation: spin 1s infinite linear;
       }
     }
-    .json-editor-wrap {
+    .json-editor-wrap,
+    .text-editor-wrap {
       position: relative;
       height: 100%;
       .response-body-op {
@@ -754,6 +792,26 @@ onUnmounted(() => {
         right: 20px;
         top: 5px;
         z-index: var(--zIndex-contextmenu);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        .view-mode-btn {
+          padding: 2px 8px;
+          border: 1px solid var(--border-light);
+          border-radius: 999px;
+          background: var(--bg-primary);
+          color: var(--text-secondary);
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          transition: all 0.2s ease;
+        }
+        .view-mode-btn.active {
+          border-color: var(--theme-color);
+          color: var(--theme-color);
+          background: var(--bg-secondary);
+        }
         .op-btn {
           color: var(--theme-color);
           cursor: pointer;
