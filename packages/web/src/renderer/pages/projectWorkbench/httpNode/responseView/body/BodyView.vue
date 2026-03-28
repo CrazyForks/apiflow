@@ -70,6 +70,23 @@
         </div>
       </div>
     </el-dialog>
+    <div v-if="showResponseToolbar" class="body-toolbar">
+      <div class="toolbar-left">
+        <div class="view-mode-switch">
+          <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'text' }" @click="switchResponseBodyViewMode('text')">
+            <FileText :size="12" />
+            <span>{{ t('文本') }}</span>
+          </button>
+          <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'json' }" @click="switchResponseBodyViewMode('json')">
+            <FileJson :size="12" />
+            <span>JSON</span>
+          </button>
+        </div>
+      </div>
+      <div v-if="shouldShowFormatAction" class="toolbar-right">
+        <span class="op-btn" @click="handleFormatResponse">{{ t('格式化') }}</span>
+      </div>
+    </div>
     <template v-if="httpNodeResponseStore.responseInfo.contentType">
       <!-- eventStream -->
       <div v-if="httpNodeResponseStore.responseInfo.responseData.canApiflowParseType === 'textEventStream'" class="sse-view-wrap">
@@ -170,32 +187,11 @@
           <span class="ml-1 mr-3">{{ formatUnit(httpNodeConfigStore.currentHttpNodeConfig.maxTextBodySize, 'bytes') }}</span>
           <el-button link type="primary" text @click="() => downloadStringAsText(formatedText, textResponseDownloadName)">{{ t("下载到本地预览") }}</el-button>
         </div>
-        <div v-else-if="isManualJsonTextView" class="json-editor-wrap">
+        <div v-else-if="isManualJsonTextView" class="editor-wrap">
           <SJsonEditor :model-value="formatedText" read-only :config="{ fontSize: 13, language: 'json' }"></SJsonEditor>
-          <div class="response-body-op">
-            <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'text' }" @click="switchResponseBodyViewMode('text')">
-              <FileText :size="14" />
-              <span>{{ t('文本') }}</span>
-            </button>
-            <button type="button" class="view-mode-btn" :class="{ active: activeResponseBodyViewMode === 'json' }" @click="switchResponseBodyViewMode('json')">
-              <FileJson :size="14" />
-              <span>JSON</span>
-            </button>
-            <span class="op-btn" @click="handleFormatResponse">{{ t('格式化') }}</span>
-          </div>
         </div>
-        <div v-else class="text-editor-wrap">
+        <div v-else class="editor-wrap">
           <SJsonEditor :model-value="formatedText" read-only :config="{ fontSize: 13, language: 'text' }"></SJsonEditor>
-          <div v-if="canSwitchResponseBodyViewMode" class="response-body-op">
-            <button type="button" class="view-mode-btn active" @click="switchResponseBodyViewMode('text')">
-              <FileText :size="14" />
-              <span>{{ t('文本') }}</span>
-            </button>
-            <button type="button" class="view-mode-btn" @click="switchResponseBodyViewMode('json')">
-              <FileJson :size="14" />
-              <span>JSON</span>
-            </button>
-          </div>
         </div>
       </div>
       <!-- application/json -->
@@ -208,11 +204,8 @@
           <el-button link type="primary" text @click="() => downloadStringAsText(formatedText, 'response.json')">{{ t("下载到本地预览") }}</el-button>
         </div>
         <el-empty v-else-if="isJsonDataEmpty" :description="t('数据为空')"></el-empty>
-        <div v-else-if="httpNodeResponseStore.requestState === 'finish'" class="json-editor-wrap">
+        <div v-else-if="httpNodeResponseStore.requestState === 'finish'" class="editor-wrap">
           <SJsonEditor :model-value="formatedText || httpNodeResponseStore.responseInfo.responseData.jsonData" read-only :config="{ fontSize: 13, language: 'json' }"></SJsonEditor>
-          <div class="response-body-op">
-            <span class="op-btn" @click="handleFormatResponse">{{ t('格式化') }}</span>
-          </div>
         </div>
         <div v-else-if="formatedText.length === 0 && httpNodeResponseStore.requestState === 'response'" class="json-loading">
           <el-icon size="16"><Loading /></el-icon>
@@ -433,6 +426,8 @@ const isManualJsonTextView = computed(() => {
     && canSwitchResponseBodyViewMode.value
     && activeResponseBodyViewMode.value === 'json'
 })
+const showResponseToolbar = computed(() => canSwitchResponseBodyViewMode.value)
+const shouldShowFormatAction = computed(() => isManualJsonTextView.value)
 const textResponseDownloadName = computed(() => isManualJsonTextView.value ? 'response.json' : 'response.txt')
 /*
 |--------------------------------------------------------------------------
@@ -764,6 +759,10 @@ onUnmounted(() => {
   }
   .text-wrap {
     height: 100%;
+    &.with-toolbar,
+    .editor-wrap {
+      height: 100%;
+    }
     @keyframes spin {
       0% {
         transform: rotate(0deg);
@@ -783,41 +782,72 @@ onUnmounted(() => {
         animation: spin 1s infinite linear;
       }
     }
-    .json-editor-wrap,
-    .text-editor-wrap {
-      position: relative;
+    .editor-wrap {
       height: 100%;
-      .response-body-op {
-        position: absolute;
-        right: 20px;
-        top: 5px;
-        z-index: var(--zIndex-contextmenu);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        .view-mode-btn {
-          padding: 2px 8px;
-          border: 1px solid var(--border-light);
-          border-radius: 999px;
-          background: var(--bg-primary);
-          color: var(--text-secondary);
-          cursor: pointer;
-          display: inline-flex;
-          align-items: center;
-          gap: 4px;
-          transition: all 0.2s ease;
-        }
-        .view-mode-btn.active {
-          border-color: var(--theme-color);
-          color: var(--theme-color);
-          background: var(--bg-secondary);
-        }
-        .op-btn {
-          color: var(--theme-color);
-          cursor: pointer;
-        }
+    }
+  }
+  .body-toolbar {
+    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 0 12px;
+    border-bottom: 1px solid var(--border-light);
+    background: var(--bg-secondary);
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .view-mode-switch {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 2px;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      background: var(--bg-primary);
+    }
+    .view-mode-btn,
+    .view-mode-badge {
+      padding: 3px 8px;
+      border: none;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 12px;
+      line-height: 1;
+      .lucide {
+        opacity: 0.8;
       }
     }
+    .view-mode-btn {
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .view-mode-btn.active,
+    .view-mode-badge {
+      color: var(--text-primary);
+      background: var(--bg-secondary);
+    }
+    .view-mode-btn:hover:not(.active) {
+      color: var(--text-primary);
+      background: color-mix(in srgb, var(--bg-secondary) 70%, transparent);
+    }
+    .op-btn {
+      color: var(--theme-color);
+      cursor: pointer;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+  }
+  .body-toolbar + .text-wrap {
+    height: calc(100% - 34px);
   }
   .operation {
     height: 30px;

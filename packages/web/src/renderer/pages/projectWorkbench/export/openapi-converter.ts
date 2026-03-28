@@ -1,4 +1,5 @@
 import type { HttpNode, HttpNodeBodyParams, HttpNodeResponseParams } from '@src/types';
+import json5 from 'json5';
 
 type OpenAPISpec = {
   openapi: string;
@@ -302,7 +303,7 @@ export class OpenAPIConverter {
   }
   private parseJsonToSchema(jsonString: string): unknown {
     try {
-      const jsonObj = JSON.parse(jsonString);
+      const jsonObj = json5.parse(jsonString);
       return this.convertJsonToSchema(jsonObj);
     } catch (error) {
       return {
