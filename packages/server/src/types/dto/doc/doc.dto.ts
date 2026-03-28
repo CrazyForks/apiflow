@@ -455,8 +455,8 @@ export class ImportedDocInfo {
   /**
    * 是否为文件夹
    */
-  @Rule(RuleType.boolean().required())
-  isFolder: boolean;
+  @Rule(RuleType.boolean())
+  isFolder?: boolean;
   /**
    * 排序字段，时间戳
    */

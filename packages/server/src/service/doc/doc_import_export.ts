@@ -1150,9 +1150,17 @@ export class DocImportAndExportService {
           originDoc.pid = newId
         }
       })
+      const isFolder = docInfo.isFolder ?? (docInfo.info?.type === 'folder');
+      const requestUrl = docInfo.item?.url as { host?: string; prefix?: string } | undefined;
+      if (requestUrl && !requestUrl.host && requestUrl.prefix) {
+        requestUrl.host = requestUrl.prefix;
+      }
       docInfo.projectId = projectId;
       docInfo._id = newId;
-      docInfo.item.method = (docInfo.item?.method?.toUpperCase() as RequestMethod) || 'GET';
+      docInfo.isFolder = isFolder;
+      if (!isFolder && docInfo.item) {
+        docInfo.item.method = (docInfo.item.method?.toUpperCase() as RequestMethod) || 'GET';
+      }
       return docInfo;
     })
     const convertHosts = hosts && hosts.map(host => {

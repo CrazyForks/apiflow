@@ -404,10 +404,26 @@ const handleSubmit = async () => {
       return
     }
     const mountedId = currentMountedNode.value?._id
-    const docs = formInfo.value.moyuData.docs.map(val => ({
-      ...val,
-      pid: !val.pid && mountedId ? mountedId : val.pid,
-    }))
+    const docs = formInfo.value.moyuData.docs.map(val => {
+      const normalizedDoc = {
+        ...val,
+        pid: !val.pid && mountedId ? mountedId : val.pid,
+        isFolder: val.info.type === 'folder',
+      }
+      if (!('item' in val)) {
+        return normalizedDoc
+      }
+      return {
+        ...normalizedDoc,
+        item: {
+          ...val.item,
+          url: {
+            ...val.item.url,
+            host: val.item.url.prefix,
+          },
+        },
+      }
+    })
     if (isStandalone.value && formInfo.value.cover) {
       const copiedDocs = JSON.parse(JSON.stringify(docs)) as HttpNode[]
       await apiNodesCache.replaceAllNodes(copiedDocs, projectId)

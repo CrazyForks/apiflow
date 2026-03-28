@@ -24,6 +24,7 @@
           show-checkbox
           :data="response.headers.defaultHeaders"
           no-add
+          @change="handleDefaultHeadersChange"
         />
       </div>
       <div v-else class="cursor-pointer no-select d-flex a-center" @click="hideDefaultHeaders = false">
@@ -39,6 +40,7 @@
         show-checkbox
         :data="response.headers.customHeaders"
         no-add
+        @change="handleCustomHeadersChange"
       />
     </div>
   </div>
@@ -52,6 +54,7 @@ import { Close, ArrowRight, ArrowDown, View } from '@element-plus/icons-vue'
 import SParamsTree from '@/components/apidoc/paramsTree/ClParamsTree.vue'
 import { appStateCache } from '@/cache/appState/appStateCache'
 import type { HttpMockNode } from '@src/types/mockNode'
+import type { ApidocProperty } from '@src/types'
 
 
 import { message } from '@/helper'
@@ -80,6 +83,12 @@ onMounted(() => {
 const handleToggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
   appStateCache.setHttpMockResponseHeadersCollapseState(props.mockNodeId, props.responseIndex, isCollapsed.value)
+}
+const handleDefaultHeadersChange = (data: ApidocProperty<'string' | 'file'>[]) => {
+  props.response.headers.defaultHeaders = data as ApidocProperty<'string'>[]
+}
+const handleCustomHeadersChange = (data: ApidocProperty<'string' | 'file'>[]) => {
+  props.response.headers.customHeaders = data as ApidocProperty<'string'>[]
 }
 
 // 删除返回头配置
